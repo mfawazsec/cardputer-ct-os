@@ -91,6 +91,11 @@ int current_proc = 1; // Start in Main Menu
 #include "localization.h"
 #include <BLEUtils.h>
 #include <BLEServer.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
+#include <Preferences.h>
+#include <ArduinoJson.h>
 struct MENU {
   char name[19];
   int command;
@@ -269,7 +274,9 @@ MenuController menuController;
 /// MAIN MENU ///
 MENU mmenu[] = {
   { "Mobile Devices", 16},
-  { TXT_SETTINGS, 2},
+  { "Wi-Fi Config",   20},
+  { "Ather",          30},
+  { TXT_SETTINGS,      2},
 };
 int mmenu_size = sizeof(mmenu) / sizeof(MENU);
 
@@ -1235,6 +1242,10 @@ void bootScreen(){
   }
 }
 
+// ---- Wi-Fi + Ather modules (all OS functions defined above) ----
+#include "wifi_config.h"
+#include "apps/ather/ather_app.h"
+
 /// ENTRY ///
 void setup() {
   Serial.begin(115200);
@@ -1266,6 +1277,13 @@ void setup() {
 
   // Random seed
   randomSeed(analogRead(0));
+
+  // Wi-Fi + Ather init (non-blocking — WiFi connects in background)
+  wifi_autoconnect();
+  ather_auth_init();
+  ather_api_init();
+  ather_storage_init();
+  ather_tracker_start();
 
   // Create the BLE Server
   BLEDevice::init("");
@@ -1301,7 +1319,16 @@ ProcessHandler processes[] = {
   {6, battery_setup, battery_loop, "Battery Info"},
   {10, credits_setup, credits_loop, "Credits"},
   {16, mobiledevices_setup, mobiledevices_loop, "Mobile Devices"},
-  {17, btmaelstrom_setup, btmaelstrom_loop, "BT Maelstrom"},
+  {17, btmaelstrom_setup,   btmaelstrom_loop,   "BT Maelstrom"},
+  {20, wificfg_setup,       wificfg_loop,        "Wi-Fi Config"},
+  {30, ather_menu_setup,    ather_menu_loop,     "Ather Menu"},
+  {31, ather_dash_setup,    ather_dash_loop,     "Ather Dashboard"},
+  {32, ather_ride_setup,    ather_ride_loop,     "Last Ride"},
+  {33, ather_settings_setup,ather_settings_loop, "Ather Settings"},
+  {34, ather_tracker_setup, ather_tracker_loop,  "Tracker Mode"},
+  {35, ather_debug_setup,   ather_debug_loop,    "Ather Debug"},
+  {36, ather_history_setup, ather_history_loop,  "Ride History"},
+  {37, ather_alert_setup,   ather_alert_loop,    "Ather Alert"},
   {22, color_setup, color_loop, "Color Settings"},
   {23, theme_setup, theme_loop, "Theme Settings"},
   {-1, nullptr, nullptr, nullptr} // Sentinel
@@ -1332,6 +1359,9 @@ void runCurrentLoop() {
 }
 
 void loop() {
+  // Ather anti-theft alert check (must run before switcher)
+  ather_tracker_check_alert();
+
   // This is the code to handle running the main loops
   // Background processes
   switcher_button_proc();
